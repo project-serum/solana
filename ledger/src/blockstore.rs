@@ -959,6 +959,11 @@ impl Blockstore {
                     .get((slot, set_index))
                     .expect("Expect database get to succeed")
                     .unwrap_or_else(|| {
+                        datapoint_info!(
+                            "fec-size",
+                            ("num_data", erasure_config.num_data(), i64),
+                            ("num_coding", erasure_config.num_coding(), i64)
+                        );
                         ErasureMeta::new(set_index, first_coding_index, &erasure_config)
                     })
             });
