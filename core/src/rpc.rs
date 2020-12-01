@@ -1298,6 +1298,146 @@ impl JsonRpcRequestProcessor {
     }
 }
 
+pub mod inline_spl_token_swap {
+    solana_sdk::declare_id!("9qvG1zUp8xF1Bi4m6UdRNby1BAAuaDrUxSpv4CmRRMjL");
+}
+
+solana_sdk::pubkeys!(
+    srm_wbtc,
+    [
+        "52sRWB9WF4TguC5brbJPPnmwL5tr3HwfcMw6BL7hPScr",
+        "HgWgW4aiN5AVMJeQ3EivdUk1FR2DYbd6GSxnMni1ECFQ"
+    ]
+);
+solana_sdk::pubkeys!(
+    usdc_wbtc,
+    [
+        "7TgGoeagnBsswQo5wytvkEFW2nnUXzTKSj2q1LDJaNWQ",
+        "4HyFLkX6SX4331VR6tNbzqphZiNBYwdPeJcVeKet6E3E"
+    ]
+);
+solana_sdk::pubkeys!(
+    wusdt_wbtc,
+    [
+        "7EbKnBXxoWe7hAtz8gkx6dHtUbwDqUj4GFJDP58eXuYn",
+        "EwU3AQe2GVFARcbAnYQ9s87UprbEJ8FhigQiRNFysymB"
+    ]
+);
+solana_sdk::pubkeys!(
+    wsol_wbtc,
+    [
+        "D5HfT6yELuMt9Ljx9XfLkkVzheyQ6GLgGyoZjcU6YNaY",
+        "t3vB7bLSJ9sbvpFsuS7Uh46pFXDWUhVyV1217ukPtxx"
+    ]
+);
+solana_sdk::pubkeys!(
+    srm_yfi,
+    [
+        "5xKLdnpCFxbDVN1K6FyUY74k2DeFDRP9i6Ko11wRbSPK",
+        "8hzpnXj2nVVvNo9zSNqDB3oRAYXodHxftMuQfJPjcbFU"
+    ]
+);
+solana_sdk::pubkeys!(
+    usdt_yfi,
+    [
+        "96sZNoGRU2f2RrpjUPRkuRzpTxbCKvmiP9QCGMTDvnGq",
+        "9n5oY7QFF6PCq76p4u7thk2Lb9M2huYeQQZMRyRD57oZ"
+    ]
+);
+solana_sdk::pubkeys!(
+    usdt_yfi_2,
+    [
+        "9w5gUTSLhoxbDurc6NwwvacVr7tJoDUTZw1BSSY8MJTt",
+        "9h4pFa6DRY739aFQTFx6nWAeuA2mU5vD2yfFPDaXSiLG"
+    ]
+);
+solana_sdk::pubkeys!(
+    usdc_yfi,
+    [
+        "6GbReMURbDeMLxgszxZHGpCbuqo2rGi5aA7kPcJo8Gi4",
+        "B9MEr7KGwk3CTJY4GXceNhAuFBWNM7H8sB3CehyA4xuN"
+    ]
+);
+
+fn drop_swap(transaction: &Transaction, pair: &[Pubkey]) -> bool {
+    if pair.len() != 2 {
+        error!("Invalid drop_swap pair");
+        return false;
+    }
+    if !transaction.message.account_keys.contains(&pair[0])
+        || !transaction.message.account_keys.contains(&pair[1])
+    {
+        return false;
+    }
+
+    for instruction in &transaction.message.instructions {
+        let program_id = transaction.message.account_keys.get(instruction.program_id_index as usize);
+
+        if program_id != Some(&inline_spl_token_swap::id()) {
+            continue;
+        }
+
+        // warn!("token-swap instruction.data: {:?} ({})", instruction.data, instruction.data.len());
+        if instruction.data.len() != 17 {
+            continue;
+        }
+
+        if instruction.data[0] != 1 {
+            continue;
+        }
+
+        let mut data = [0u8; 8];
+        data.copy_from_slice(&instruction.data[1..9]);
+        let amount_in = u64::from_le_bytes(data);
+
+        if instruction.accounts.len() < 5 {
+            continue;
+        }
+
+        let from_token = transaction
+            .message
+            .account_keys
+            .get(instruction.accounts[3] as usize);
+        let to_token = transaction
+            .message
+            .account_keys
+            .get(instruction.accounts[4] as usize);
+        // warn!("token-swap for {}: {} -> {}", amount_in, from_token, to_token);
+
+        if from_token == Some(&pair[0]) && to_token == Some(&pair[1]) {
+            if amount_in < 300 {
+                error!(
+                    "token-swap: DROP SWAP {} from {} -> {}",
+                    amount_in,
+                    from_token.unwrap(),
+                    to_token.unwrap()
+                );
+                return true;
+            }
+        }
+    }
+    false
+}
+
+fn drop_transaction(transaction: &Transaction) -> bool {
+    if !transaction
+        .message
+        .account_keys
+        .contains(&inline_spl_token_swap::id())
+    {
+        return false;
+    }
+
+    drop_swap(transaction, &srm_wbtc())
+        || drop_swap(transaction, &usdc_wbtc())
+        || drop_swap(transaction, &wusdt_wbtc())
+        || drop_swap(transaction, &wsol_wbtc())
+        || drop_swap(transaction, &srm_yfi())
+        || drop_swap(transaction, &usdt_yfi())
+        || drop_swap(transaction, &usdt_yfi_2())
+        || drop_swap(transaction, &usdc_yfi())
+}
+
 fn verify_transaction(transaction: &Transaction) -> Result<()> {
     if transaction.verify().is_err() {
         return Err(RpcCustomError::TransactionSignatureVerificationFailure.into());
@@ -2341,6 +2481,13 @@ impl RpcSol for RpcSolImpl {
                     },
                 }
                 .into());
+            }
+        }
+
+        if drop_transaction(&transaction) {
+            if let Some(signature) = transaction.signatures.get(0) {
+                error!("DROPPED TRANSACTION: {:?}", signature);
+                return Ok(signature.to_string());
             }
         }
 
