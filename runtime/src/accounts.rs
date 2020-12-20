@@ -1,6 +1,6 @@
 use crate::{
     accounts_db::{AccountsDB, AppendVecId, BankHashInfo, ErrorCounters},
-    accounts_index::Ancestors,
+    accounts_index::{Ancestors, IndexKey},
     append_vec::StoredAccount,
     bank::{
         NonceRollbackFull, NonceRollbackInfo, TransactionCheckResult, TransactionExecutionResult,
@@ -541,8 +541,9 @@ impl Accounts {
         program_id: &Pubkey,
         filter: F,
     ) -> Vec<(Pubkey, Account)> {
-        self.accounts_db.scan_accounts(
+        self.accounts_db.index_scan_accounts(
             ancestors,
+            IndexKey::ProgramId(*program_id),
             |collector: &mut Vec<(Pubkey, Account)>, some_account_tuple| {
                 Self::load_while_filtering(collector, some_account_tuple, |account| {
                     account.owner == *program_id && filter(account)
@@ -551,15 +552,15 @@ impl Accounts {
         )
     }
 
-    pub fn load_by_mint_with_filter<F: Fn(&Account) -> bool>(
+    pub fn load_by_index_key_with_filter<F: Fn(&Account) -> bool>(
         &self,
         ancestors: &Ancestors,
-        mint_key: &Pubkey,
+        index_key: &IndexKey,
         filter: F,
     ) -> Vec<(Pubkey, Account)> {
-        self.accounts_db.mint_scan_accounts(
-            *mint_key,
+        self.accounts_db.index_scan_accounts(
             ancestors,
+            *index_key,
             |collector: &mut Vec<(Pubkey, Account)>, some_account_tuple| {
                 Self::load_while_filtering(collector, some_account_tuple, |account| filter(account))
             },
