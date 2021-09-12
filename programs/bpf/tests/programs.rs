@@ -92,7 +92,7 @@ fn run_program(
         enable_instruction_meter: true,
         enable_instruction_tracing: true,
     };
-    let mut executable = Executable::from_elf(&data, None, config).unwrap();
+    let mut executable = <dyn Executable>::from_elf(&data, None, config).unwrap();
     executable.set_syscall_registry(register_syscalls(&mut invoke_context).unwrap());
     executable.jit_compile().unwrap();
 
