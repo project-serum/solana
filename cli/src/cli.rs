@@ -1231,7 +1231,7 @@ fn do_process_deploy(
         CliError::DynamicProgramError(format!("Unable to read program file: {}", err))
     })?;
 
-    Executable::<BPFError, ThisInstructionMeter>::from_elf(
+    <dyn Executable::<BPFError, ThisInstructionMeter>>::from_elf(
         &program_data,
         Some(|x| bpf_verifier::check(x, false)),
         Config::default(),

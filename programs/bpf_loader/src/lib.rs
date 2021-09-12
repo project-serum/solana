@@ -98,7 +98,7 @@ pub fn create_and_cache_executor(
     invoke_context: &mut dyn InvokeContext,
 ) -> Result<Arc<BPFExecutor>, InstructionError> {
     let bpf_compute_budget = invoke_context.get_bpf_compute_budget();
-    let mut executable = Executable::<BPFError, ThisInstructionMeter>::from_elf(
+    let mut executable = <dyn Executable::<BPFError, ThisInstructionMeter>>::from_elf(
         &program.try_account_ref()?.data,
         None,
         Config {
@@ -370,7 +370,7 @@ mod tests {
         ];
         let input = &mut [0x00];
 
-        let executable = Executable::<BPFError, TestInstructionMeter>::from_text_bytes(
+        let executable = <dyn Executable::<BPFError, TestInstructionMeter>>::from_text_bytes(
             program,
             None,
             Config::default(),
